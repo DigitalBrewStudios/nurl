@@ -1,4 +1,4 @@
-use std::{fmt::Write as _, io::Write};
+use std::{fmt::Write as _, io::Write, usize};
 
 use eyre::{Result, bail};
 use itertools::Itertools;
@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use crate::{
     Url,
     config::FetcherConfig,
-    prefetch::{flake_prefetch, fod_prefetch, git_prefetch, url_prefetch},
+    prefetch::{flake_prefetch, fod_prefetch, git_prefetch, mercurial_prefetch, url_prefetch},
 };
 
 pub enum RevKey {
@@ -246,6 +246,34 @@ pub trait SimpleGitFetcher<'a, const N: usize>: SimpleFetcher<'a, N> {
             self.fetch_fod(values, rev_key, rev, submodules, cfg)
         } else if submodules {
             git_prefetch(
+                true,
+                &self.get_repo_url(values),
+                rev,
+                !Self::SUBMODULES_DEFAULT,
+            )
+        } else {
+            flake_prefetch(self.get_flake_ref(values, rev))
+        }
+    }
+}
+
+pub trait SimpleMercurialFetcher<'a, const N: usize>: SimpleFetcher<'a, N> {
+    fn get_flake_ref(&self, values: &[&str; N], rev: &str) -> String;
+
+    fn get_repo_url(&self, values: &[&str; N]) -> String;
+
+    fn fetch(
+        &self,
+        values: &[&str; N],
+        rev_key: &'static str,
+        rev: &str,
+        submodules: bool,
+        cfg: &FetcherConfig,
+    ) -> Result<String> {
+        if cfg.has_args() {
+            self.fetch_fod(values, rev_key, rev, submodules, cfg)
+        } else if submodules {
+            mercurial_prefetch(
                 true,
                 &self.get_repo_url(values),
                 rev,

@@ -1,6 +1,6 @@
 use crate::{
     impl_fetcher,
-    simple::{RevKey, SimpleFetcher, SimpleGitFetcher},
+    simple::{RevKey, SimpleFetcher, SimpleGitFetcher, SimpleMercurialFetcher},
 };
 
 pub struct FetchFromSourcehut<'a>(pub Option<&'a str>);
@@ -11,6 +11,7 @@ impl<'a> SimpleFetcher<'a, 2> for FetchFromSourcehut<'a> {
     const NAME: &'static str = "fetchFromSourcehut";
     const REV_KEY: RevKey = RevKey::RevOrTag;
     const SUBMODULES_KEY: Option<&'static str> = Some("fetchSubmodules");
+    const VCS_KEY: Option<&'static str> = Some("vcs");
 
     fn host(&self) -> Option<&str> {
         self.0
@@ -31,5 +32,19 @@ impl<'a> SimpleGitFetcher<'a, 2> for FetchFromSourcehut<'a> {
             "git+https://{}/{owner}/{repo}",
             self.0.unwrap_or("git.sr.ht"),
         )
+    }
+}
+
+impl<'a> SimpleMercurialFetcher<'a, 2> for FetchFromSourcehut<'a> {
+    fn get_flake_ref(&self, [owner, repo]: &[&str; 2], rev: &str) -> String {
+        if let Some(host) = self.0 {
+            format!("sourcehut:{owner}/{repo}/{rev}?host={host}")
+        } else {
+            format!("sourcehut:{owner}/{repo}/{rev}")
+        }
+    }
+
+    fn get_repo_url(&self, [owner, repo]: &[&str; 2]) -> String {
+        format!("hg+https://{}/{owner}/{repo}", self.0.unwrap_or("hg.sr.ht"),)
     }
 }

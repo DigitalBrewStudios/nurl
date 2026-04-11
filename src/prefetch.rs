@@ -71,6 +71,28 @@ pub fn git_prefetch(git_scheme: bool, url: &str, rev: &str, submodules: bool) ->
     }
 }
 
+pub fn mercurial_prefetch(
+    hg_scheme: bool,
+    url: &str,
+    rev: &str,
+    submodules: bool,
+) -> Result<String> {
+    let prefix = if hg_scheme { "" } else { "hg+" };
+    let submodules = if submodules { "&submodules=1" } else { "" };
+
+    if rev.len() == 40 {
+        flake_prefetch(format!("{prefix}{url}?allRefs=1&rev={rev}{submodules}"))
+    } else {
+        if !rev.starts_with("refs/")
+            && let hash @ Ok(_) =
+                flake_prefetch(format!("{prefix}{url}?ref=refs/tags/{rev}{submodules}"))
+        {
+            return hash;
+        }
+        flake_prefetch(format!("{prefix}{url}?ref={rev}{submodules}"))
+    }
+}
+
 pub fn url_prefetch(url: &str) -> Result<String> {
     info!("$ nix store prefetch-file --json {url}");
 
