@@ -1,6 +1,6 @@
 use eyre::Result;
 
-use crate::{Url, config::FetcherConfig, prefetch::flake_prefetch, revless::RevlessFetcher};
+use crate::{Url, config::FetcherConfig, prefetch::Prefetch, revless::RevlessFetcher};
 
 pub struct Fetchzip;
 
@@ -11,7 +11,7 @@ impl RevlessFetcher for Fetchzip {
         if cfg.has_args() {
             self.fetch_fod(url, cfg)
         } else {
-            flake_prefetch(format!("tarball+{url}"))
+            Prefetch::new().flake_prefetch(format!("tarball+{url}").as_str())
         }
     }
 }

@@ -30,7 +30,6 @@
         pkgs: with pkgs; [
           gitMinimal
           mercurial
-          nix
         ];
 
       packageFor =
@@ -62,7 +61,10 @@
           nativeBuildInputs = [
             installShellFiles
             makeBinaryWrapper
+						pkgs.nix
           ];
+
+					buildInputs = [ pkgs.pkg-config ];
 
           # disable tests that require internet access
           checkFlags = [
@@ -91,8 +93,13 @@
     in
     {
       devShells = eachSystem (pkgs: {
+				NIX_CC_UNWRAPPED = pkgs.nix;
         default = pkgs.mkShell {
           packages = runtimeInputs pkgs;
+					buildInputs = with pkgs; [ 
+						nix
+						pkg-config
+					];
         };
       });
 

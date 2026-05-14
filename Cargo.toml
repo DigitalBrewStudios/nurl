@@ -18,6 +18,11 @@ enum_dispatch = "0.3.13"
 eyre = "0.6.12"
 gix-url = "0.36.0"
 itertools = "0.14.0"
+nix-bindings-expr = "0.2.0"
+nix-bindings-fetchers = "0.2.0"
+nix-bindings-flake = "0.2.0"
+nix-bindings-store = "0.2.0"
+nix-bindings-util = "0.2.0"
 owo-colors = { version = "4.3.0", features = ["supports-colors"] }
 rustc-hash = "2.1.2"
 serde = { version = "1.0.228", features = ["derive"] }

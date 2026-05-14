@@ -4,6 +4,10 @@ use std::{
 };
 
 use eyre::{Result, bail, eyre};
+use nix_bindings_expr::eval_state::EvalState;
+use nix_bindings_fetchers::FetchersSettings;
+use nix_bindings_flake::FlakeReferenceParseFlags;
+use nix_bindings_store::store::Store;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -36,40 +40,88 @@ macro_rules! info {
     }};
 }
 
-pub fn flake_prefetch(flake_ref: String) -> Result<String> {
-    info!(
-        "$ nix flake prefetch --extra-experimental-features 'nix-command flakes' --json {flake_ref}"
-    );
-    Ok(serde_json::from_slice::<PrefetchOutput>(
-        &Command::new("nix")
-            .arg("flake")
-            .arg("prefetch")
-            .arg("--extra-experimental-features")
-            .arg("nix-command flakes")
-            .arg("--json")
-            .arg(flake_ref)
-            .get_stdout()?,
-    )?
-    .hash)
+pub struct Prefetch {
+    eval_state: EvalState,
+    fetch_settings: FetchersSettings,
+}
+
+impl Prefetch {
+    pub fn new() -> Self {
+        Self {
+            eval_state: EvalState::new(Store::open(None, []).unwrap(), []).unwrap(),
+            fetch_settings: FetchersSettings::new().unwrap(),
+        }
+    }
+
+    pub fn flake_prefetch(&mut self, reference: &str) -> Result<String> {
+        let flake_settings = nix_bindings_flake::FlakeSettings::new().unwrap();
+        let flake_ref = nix_bindings_flake::FlakeReference::parse_with_fragment(
+            &self.fetch_settings,
+            &flake_settings,
+            &FlakeReferenceParseFlags::new(&flake_settings).unwrap(),
+            reference,
+        )
+        .unwrap();
+
+        let locked_flake = nix_bindings_flake::LockedFlake::lock(
+            &self.fetch_settings,
+            &flake_settings,
+            &self.eval_state,
+            &nix_bindings_flake::FlakeLockFlags::new(&flake_settings).unwrap(),
+            &flake_ref.0,
+        )
+        .unwrap();
+
+        let outputs = locked_flake
+            .outputs(&flake_settings, &mut self.eval_state)
+            .unwrap();
+
+        Ok("".to_string())
+    }
+
+    // work around for https://github.com/NixOS/nix/issues/5291
+    pub fn git_prefetch(
+        &mut self,
+        git_scheme: bool,
+        url: &str,
+        rev: &str,
+        submodules: bool,
+    ) -> Result<String> {
+        let prefix = if git_scheme { "" } else { "git+" };
+        let submodules = if submodules { "&submodules=1" } else { "" };
+
+        if rev.len() == 40 {
+            self.flake_prefetch(format!("{prefix}{url}?allRefs=1&rev={rev}{submodules}").as_str())
+        } else {
+            if !rev.starts_with("refs/")
+                && let hash @ Ok(_) = self.flake_prefetch(
+                    format!("{prefix}{url}?ref=refs/tags/{rev}{submodules}").as_str(),
+                )
+            {
+                return hash;
+            }
+            self.flake_prefetch(format!("{prefix}{url}?ref={rev}{submodules}").as_str())
+        }
+    }
 }
 
 // work around for https://github.com/NixOS/nix/issues/5291
-pub fn git_prefetch(git_scheme: bool, url: &str, rev: &str, submodules: bool) -> Result<String> {
-    let prefix = if git_scheme { "" } else { "git+" };
-    let submodules = if submodules { "&submodules=1" } else { "" };
-
-    if rev.len() == 40 {
-        flake_prefetch(format!("{prefix}{url}?allRefs=1&rev={rev}{submodules}"))
-    } else {
-        if !rev.starts_with("refs/")
-            && let hash @ Ok(_) =
-                flake_prefetch(format!("{prefix}{url}?ref=refs/tags/{rev}{submodules}"))
-        {
-            return hash;
-        }
-        flake_prefetch(format!("{prefix}{url}?ref={rev}{submodules}"))
-    }
-}
+// pub fn git_prefetch(git_scheme: bool, url: &str, rev: &str, submodules: bool) -> Result<String> {
+//     let prefix = if git_scheme { "" } else { "git+" };
+//     let submodules = if submodules { "&submodules=1" } else { "" };
+//
+//     if rev.len() == 40 {
+//         flake_prefetch(format!("{prefix}{url}?allRefs=1&rev={rev}{submodules}").as_str())
+//     } else {
+//         if !rev.starts_with("refs/")
+//             && let hash @ Ok(_) =
+//                 flake_prefetch(format!("{prefix}{url}?ref=refs/tags/{rev}{submodules}").as_str())
+//         {
+//             return hash;
+//         }
+//         flake_prefetch(format!("{prefix}{url}?ref={rev}{submodules}").as_str())
+//     }
+// }
 
 pub fn url_prefetch(url: &str) -> Result<String> {
     info!("$ nix store prefetch-file --json {url}");
